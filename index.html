@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caddyfile Editor</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #d4d4d4;
+            --toolbar-bg: #252526;
+            --border-color: #333;
+            --btn-bg: #0e639c;
+            --btn-hover: #1177bb;
+            --terminal-bg: #000000;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            height: 50px;
+            background-color: var(--toolbar-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        #editor-container {
+            flex-grow: 1;
+            height: 70%;
+        }
+
+        #terminal-container {
+            height: 30%;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--terminal-bg);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px;
+            background-color: var(--toolbar-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .terminal-header h3 {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: normal;
+        }
+
+        #output-log {
+            margin: 0;
+            padding: 10px;
+            overflow-y: auto;
+            flex-grow: 1;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            color: #a9a9a9;
+        }
+
+        #output-log.error {
+            color: #ff5555;
+        }
+
+        #output-log.success {
+            color: #55ff55;
+        }
+
+        .btn {
+            background-color: var(--btn-bg);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--btn-hover);
+        }
+
+        .btn.primary {
+            padding: 8px 16px;
+            font-weight: bold;
+        }
+
+        .btn.small {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            background-color: #444;
+        }
+
+        .btn.small:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar">
+        <h1 id="editor-title">Caddyfile Editor</h1>
+        <button id="save-btn" class="btn primary">Save & Reload Caddy</button>
+    </div>
+    <div class="main-container">
+        <div id="editor-container"></div>
+        <div id="terminal-container">
+            <div class="terminal-header">
+                <h3>Output Log</h3>
+                <button id="clear-log-btn" class="btn small">Clear</button>
+            </div>
+            <pre id="output-log"></pre>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+    <script>
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+
+        let editor;
+
+        require(['vs/editor/editor.main'], function () {
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: '// Loading Caddyfile...',
+                language: 'shell', // basic syntax highlighting suitable for config
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: false }
+            });
+
+            fetchBranding();
+            fetchCaddyfile();
+        });
+
+        const outputLog = document.getElementById('output-log');
+        const saveBtn = document.getElementById('save-btn');
+        const clearLogBtn = document.getElementById('clear-log-btn');
+
+        function logToTerminal(message, type = 'normal') {
+            const timestamp = new Date().toLocaleTimeString();
+            outputLog.className = type;
+            outputLog.textContent = `[${timestamp}] ${message}\n\n` + outputLog.textContent;
+        }
+
+        async function fetchBranding() {
+            try {
+                const response = await fetch('/api/branding');
+                if (response.ok) {
+                    const title = await response.text();
+                    if (title) {
+                        document.title = title;
+                        document.getElementById('editor-title').textContent = title;
+                    }
+                }
+            } catch (e) {
+                // Fallback to default, ignore error
+            }
+        }
+
+        async function fetchCaddyfile() {
+            try {
+                const response = await fetch('/api/caddyfile');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const text = await response.text();
+                editor.setValue(text);
+                logToTerminal('Caddyfile loaded successfully.', 'success');
+            } catch (e) {
+                editor.setValue('// Error loading Caddyfile. Is the backend running?');
+                logToTerminal('Failed to load Caddyfile: ' + e.message, 'error');
+            }
+        }
+
+        saveBtn.addEventListener('click', async () => {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            logToTerminal('Validating and saving...');
+
+            const configContent = editor.getValue();
+
+            try {
+                const response = await fetch('/api/caddyfile', {
+                    method: 'POST',
+                    body: configContent
+                });
+
+                const result = await response.text();
+
+                if (response.ok) {
+                    logToTerminal(`Success!\n${result}`, 'success');
+                } else {
+                    logToTerminal(`Validation Failed!\n${result}`, 'error');
+                }
+            } catch (e) {
+                logToTerminal('Network error: ' + e.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save & Reload Caddy';
+            }
+        });
+
+        clearLogBtn.addEventListener('click', () => {
+            outputLog.textContent = '';
+        });
+    </script>
+</body>
+
+</html>
