@@ -2,6 +2,8 @@
 
 A lightweight, locally-hosted web editor for your Caddyfile using the Monaco Editor (powerful editing experience originally from VS Code) that is hosted by the same Caddy instance that you're editing. It validates configuration syntax and catches errors directly via `caddy validate` before reloading your server. 
 
+![Caddyfile Editor](screen.png)
+
 ## Requirements
 - Python 3.6+ (For the minimal zero-dependency backend API)
 - Caddy 2.x
