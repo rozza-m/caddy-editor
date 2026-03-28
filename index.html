@@ -92,10 +92,12 @@
 
         #output-log.error {
             color: #ff5555;
+            background-color: #2a1111;
         }
 
         #output-log.success {
             color: #55ff55;
+            background-color: #112a11;
         }
 
         .btn {
@@ -115,6 +117,11 @@
         .btn.primary {
             padding: 8px 16px;
             font-weight: bold;
+        }
+
+        .btn:disabled {
+            background-color: #444;
+            cursor: not-allowed;
         }
 
         .btn.small {
@@ -154,7 +161,7 @@
         require(['vs/editor/editor.main'], function () {
             editor = monaco.editor.create(document.getElementById('editor-container'), {
                 value: '// Loading Caddyfile...',
-                language: 'shell', // basic syntax highlighting suitable for config
+                language: 'shell',
                 theme: 'vs-dark',
                 automaticLayout: true,
                 minimap: { enabled: false }
@@ -170,8 +177,26 @@
 
         function logToTerminal(message, type = 'normal') {
             const timestamp = new Date().toLocaleTimeString();
-            outputLog.className = type;
-            outputLog.textContent = `[${timestamp}] ${message}\n\n` + outputLog.textContent;
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+
+            // Create header
+            const header = document.createElement('div');
+            header.style.fontWeight = 'bold';
+            header.style.marginBottom = '5px';
+            header.textContent = `[${timestamp}] ${type.toUpperCase()}:`;
+
+            // Create body
+            const body = document.createElement('div');
+            body.style.whiteSpace = 'pre-wrap';
+            body.textContent = message;
+
+            entry.appendChild(header);
+            entry.appendChild(body);
+            entry.style.padding = '10px';
+            entry.style.borderBottom = '1px solid #333';
+
+            outputLog.prepend(entry);
         }
 
         async function fetchBranding() {
@@ -179,13 +204,14 @@
                 const response = await fetch('/api/branding');
                 if (response.ok) {
                     const title = await response.text();
-                    if (title) {
+                    if (title && title.trim()) {
                         document.title = title;
-                        document.getElementById('editor-title').textContent = title;
+                        const h1 = document.getElementById('editor-title');
+                        if (h1) h1.textContent = title;
                     }
                 }
             } catch (e) {
-                // Fallback to default, ignore error
+                console.warn("Branding fetch failed", e);
             }
         }
 
@@ -193,7 +219,8 @@
             try {
                 const response = await fetch('/api/caddyfile');
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errText = await response.text();
+                    throw new Error(errText || `HTTP ${response.status}`);
                 }
                 const text = await response.text();
                 editor.setValue(text);
@@ -207,7 +234,6 @@
         saveBtn.addEventListener('click', async () => {
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
-            logToTerminal('Validating and saving...');
 
             const configContent = editor.getValue();
 
@@ -220,9 +246,9 @@
                 const result = await response.text();
 
                 if (response.ok) {
-                    logToTerminal(`Success!\n${result}`, 'success');
+                    logToTerminal(`Caddy refreshed successfully!\n\n${result}`, 'success');
                 } else {
-                    logToTerminal(`Validation Failed!\n${result}`, 'error');
+                    logToTerminal(`ACTION REQUIRED\n\n${result}`, 'error');
                 }
             } catch (e) {
                 logToTerminal('Network error: ' + e.message, 'error');
@@ -233,7 +259,7 @@
         });
 
         clearLogBtn.addEventListener('click', () => {
-            outputLog.textContent = '';
+            outputLog.innerHTML = '';
         });
     </script>
 </body>

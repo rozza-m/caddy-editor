@@ -27,10 +27,18 @@ localhost:9999 {
 
 Reload Caddy once manually to apply this change:
 ```bash
-caddy reload --config /path/to/your/Caddyfile
+caddy reload --config /etc/caddy/Caddyfile
 ```
 
-### 2. Start the Backend API Process
+### 2. Grant Permissions to the Caddyfile
+For the editor to work without running as root, the `caddy` user needs permission to write to your `Caddyfile`. 
+
+```bash
+# Assuming caddy is the user that runs your Caddy instance
+sudo chown caddy:caddy /etc/caddy/Caddyfile
+```
+
+### 3. Start the Backend API Process
 In a terminal, navigate to this `caddy-editor` directory and run the Python backend. Specify the path to your actual Caddyfile.
 
 ```bash
@@ -38,7 +46,7 @@ python server.py --config "/etc/caddy/Caddyfile" --port 8080 --title "My Server 
 ```
 *Note: Make sure the port used here matches the `reverse_proxy` port specified in your Caddy config. The `--title` flag is optional and changes the frontend header text.*
 
-### 3. Open the Editor
+### 4. Open the Editor
 Navigate to `http://localhost:9999` (or the domain you configured) in your browser. You can now visually edit, validate, and safely reload Caddy directly from your browser!
 
 ---
@@ -57,7 +65,7 @@ After=network.target caddy.service
 
 [Service]
 Type=simple
-# Run as the caddy user for security
+# Run as the caddy user
 User=caddy
 Group=caddy
 WorkingDirectory=/var/www/caddyedit
